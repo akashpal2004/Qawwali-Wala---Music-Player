@@ -8,6 +8,7 @@ export default function MiniPlayerBar({
   onMaximize,
   isFavorite,
   onToggleFavorite,
+  showOnDesktop = false,
 }) {
   if (!activeTrack) return null;
 
@@ -17,7 +18,7 @@ export default function MiniPlayerBar({
 
   return (
     <aside
-      className="qw-mobile-bottom-bar"
+      className={`qw-mobile-bottom-bar ${showOnDesktop ? 'qw-show-desktop' : ''}`}
       aria-label="Now Playing Mini Bar"
       onClick={onMaximize}
     >

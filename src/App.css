@@ -1367,7 +1367,7 @@
    4. MOBILE FLOATING MINI-PLAYER BAR
    ========================================================================== */
 .qw-mobile-bottom-bar {
-  display: none; /* hidden on desktop */
+  display: none; /* hidden on desktop by default */
   position: fixed;
   bottom: 12px;
   left: 12px;
@@ -1382,6 +1382,21 @@
   padding: 8px 12px;
   cursor: pointer;
   animation: slideUp 0.25s ease-out;
+}
+
+/* Floating player bar on desktop when browsing tabs outside Home (e.g. Explore) */
+@media (min-width: 769px) {
+  .qw-mobile-bottom-bar.qw-show-desktop {
+    display: block;
+    max-width: 620px;
+    margin: 0 auto;
+    bottom: 24px;
+    left: 24px;
+    right: 24px;
+    border-color: rgba(217, 168, 91, 0.35);
+    background: rgba(18, 15, 12, 0.94);
+    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.8), 0 0 15px rgba(217, 168, 91, 0.1);
+  }
 }
 
 .qw-mini-bar-inner {

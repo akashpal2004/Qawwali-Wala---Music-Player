@@ -42,7 +42,7 @@ export default function Navbar({
   }, []);
 
   const handleSearchFocus = () => {
-    if (activeTab !== 'home') {
+    if (activeTab !== 'home' && activeTab !== 'explore') {
       onTabChange('home');
     }
   };

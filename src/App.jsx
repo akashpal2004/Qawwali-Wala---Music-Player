@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import Navbar from './components/Navbar';
 import HeroPlayer from './components/HeroPlayer';
 import TrackList from './components/TrackList';
-import ExploreView from './components/ExploreView';
 import MiniPlayerBar from './components/MiniPlayerBar';
 import DriveLocationModal from './components/DriveLocationModal';
 import AboutModal from './components/AboutModal';
@@ -513,18 +512,7 @@ export default function App() {
           </div>
         )}
 
-        {activeTab === 'explore' && (
-          <ExploreView
-            onSelectCollection={(item) => {
-              const matched = currentTrackList.find((t) => t.title === item.title) || currentTrackList[0];
-              handleSelectTrack(matched);
-              setActiveTab('home');
-            }}
-            onOpenLocations={() => setIsLocationModalOpen(true)}
-          />
-        )}
-
-        {activeTab === 'library' && (
+        {(activeTab === 'explore' || activeTab === 'library') && (
           <TrackList
             tracks={currentTrackList}
             activeTrack={activeTrack}
@@ -546,7 +534,7 @@ export default function App() {
         )}
       </main>
 
-      {/* Floating Bottom Mini Player (Mobile adaptation from reference mockup) */}
+      {/* Floating Bottom Mini Player (Mobile adaptation, and on desktop when on Explore tab) */}
       <MiniPlayerBar
         activeTrack={activeTrack}
         isPlaying={isPlaying}
@@ -554,6 +542,7 @@ export default function App() {
         onMaximize={() => setActiveTab('home')}
         isFavorite={favorites.has(activeTrack?.id)}
         onToggleFavorite={handleToggleFavorite}
+        showOnDesktop={activeTab !== 'home'}
       />
 
       {/* Drive Locations Management Modal */}
