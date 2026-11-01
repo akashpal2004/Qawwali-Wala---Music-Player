@@ -146,13 +146,14 @@ export default function App() {
             return found || parsed[0];
           }
         }
+        return null;
       }
     } catch (e) {
       console.warn('Failed to load initial active track:', e);
     }
     return DEFAULT_DEMO_TRACKS[0];
   });
-  const [audioSrc, setAudioSrc] = useState('/demo-better-days.wav');
+  const [audioSrc, setAudioSrc] = useState(null);
   const [isStreamLoading, setIsStreamLoading] = useState(false);
 
   // Active blob url reference for garbage collection
@@ -224,6 +225,14 @@ export default function App() {
 
       cleanupCurrentAudioStream();
       setActiveTrack(track);
+
+      // SAFETY: If connected to Drive, NEVER allow playing any demo track or wav!
+      if (isAuthenticated && track.isDemo) {
+        console.warn('Blocked demo track playback while connected to Google Drive.');
+        setAudioSrc(null);
+        return;
+      }
+
       if (!track.isDemo) {
         try {
           localStorage.setItem(ACTIVE_TRACK_ID_KEY, track.id);
@@ -231,31 +240,33 @@ export default function App() {
           // ignore
         }
       }
-      setIsStreamLoading(true);
 
-      // If demo track or has direct src
+      // If previewing demo track when NOT authenticated
       if (track.isDemo || track.src) {
-        setAudioSrc(track.src || '/demo-better-days.wav');
-        setIsStreamLoading(false);
+        if (!isAuthenticated) {
+          setAudioSrc(track.src || '/demo-better-days.wav');
+        }
         return;
       }
 
       // Stream from Google Drive
       if (token) {
+        setIsStreamLoading(true);
         try {
           const blobUrl = await streamTrackAudio(track.id, token);
           activeBlobUrlRef.current = blobUrl;
           setAudioSrc(blobUrl);
+          setTracksError(null);
         } catch (err) {
           console.error(`Failed to stream track "${track.title}":`, err);
+          setTracksError(`Failed to stream "${track.title}". Check folder permissions.`);
+          setAudioSrc(null);
         } finally {
           setIsStreamLoading(false);
         }
-      } else {
-        setIsStreamLoading(false);
       }
     },
-    [token, cleanupCurrentAudioStream]
+    [token, isAuthenticated, cleanupCurrentAudioStream]
   );
 
   /**
@@ -276,28 +287,49 @@ export default function App() {
         console.warn('Failed to cache drive tracks:', e);
       }
       if (files.length === 0) {
-        setTracksError('No MP3 audio files found in this folder.');
-      } else if (!activeTrack || activeTrack.isDemo) {
-        handleSelectTrack(files[0]);
+        setTracksError('No audio files (.mp3, .wav, .m4a) found in this Google Drive folder. Please add music files to this folder.');
+        setActiveTrack(null);
+        cleanupCurrentAudioStream();
+      } else {
+        // Auto-select first Drive track if none selected or if on demo track
+        if (!activeTrack || activeTrack.isDemo || !files.some((f) => f.id === activeTrack.id)) {
+          handleSelectTrack(files[0]);
+        }
       }
     } catch (err) {
-      console.error('Error fetching tracks:', err);
+      console.error('Error fetching tracks from Google Drive:', err);
       setTracksError(err.message || 'Failed to retrieve tracks from Google Drive.');
+      setDriveTracks([]);
+      setActiveTrack(null);
+      cleanupCurrentAudioStream();
     } finally {
       setIsLoadingTracks(false);
     }
-  }, [token, activeFolderId, activeTrack, handleSelectTrack]);
+  }, [token, activeFolderId, activeTrack, handleSelectTrack, cleanupCurrentAudioStream]);
 
-  // Load tracks when authenticated or active folder changes
+  // Handle authentication state changes & folder changes
   useEffect(() => {
-    if (isAuthenticated && activeFolderId) {
-      loadFolderTracks();
+    if (isAuthenticated) {
+      // Clear demo audio and demo track immediately when Drive is connected
+      if (activeTrack?.isDemo) {
+        cleanupCurrentAudioStream();
+        setActiveTrack(null);
+      }
+      if (activeFolderId) {
+        loadFolderTracks();
+      }
+    } else {
+      // If user logs out of Drive, reset to initial demo state
+      setDriveTracks([]);
+      setTracksError(null);
+      setActiveTrack(DEFAULT_DEMO_TRACKS[0]);
+      cleanupCurrentAudioStream();
     }
-  }, [isAuthenticated, activeFolderId, loadFolderTracks]);
+  }, [isAuthenticated, activeFolderId]);
 
-  // Combined tracks list (Drive tracks if authenticated & available, otherwise demo tracks)
+  // Combined tracks list: when connected to Drive, STRICTLY return Drive tracks (never demo tracks!)
   const currentTrackList = useMemo(() => {
-    if (isAuthenticated && driveTracks.length > 0) {
+    if (isAuthenticated) {
       return driveTracks;
     }
     return DEFAULT_DEMO_TRACKS;
@@ -378,11 +410,21 @@ export default function App() {
     onNextTrack: handleNextTrack,
   });
 
+  // Safe play toggle that fetches audio if not yet loaded
+  const handleTogglePlay = useCallback(() => {
+    if (isAuthenticated && activeTrack?.isDemo) return;
+    if (!audioSrc && activeTrack) {
+      handleSelectTrack(activeTrack);
+      return;
+    }
+    togglePlay();
+  }, [isAuthenticated, audioSrc, activeTrack, handleSelectTrack, togglePlay]);
+
   const handleLogout = () => {
     cleanupCurrentAudioStream();
     setDriveTracks([]);
     setActiveTrack(DEFAULT_DEMO_TRACKS[0]);
-    setAudioSrc('/demo-better-days.wav');
+    setAudioSrc(null);
     try {
       localStorage.removeItem(CACHED_TRACKS_KEY);
       localStorage.removeItem(ACTIVE_TRACK_ID_KEY);
@@ -469,13 +511,16 @@ export default function App() {
               isPlaying={isPlaying}
               isBuffering={isBuffering}
               isStreamLoading={isStreamLoading}
+              isLoadingTracks={isLoadingTracks}
+              isAuthenticated={isAuthenticated}
+              tracksCount={currentTrackList.length}
               currentTime={currentTime}
-              duration={duration || activeTrack?.duration || 372}
+              duration={duration || activeTrack?.duration || 0}
               volume={volume}
               isMuted={isMuted}
               repeatMode={repeatMode}
               isShuffle={isShuffle}
-              onTogglePlay={togglePlay}
+              onTogglePlay={handleTogglePlay}
               onNext={() => handleNextTrack(isShuffle)}
               onPrevious={() => handlePreviousTrack(isShuffle)}
               onToggleShuffle={toggleShuffle}
@@ -500,7 +545,7 @@ export default function App() {
               error={tracksError}
               isAuthenticated={isAuthenticated}
               onSelectTrack={handleSelectTrack}
-              onTogglePlay={togglePlay}
+              onTogglePlay={handleTogglePlay}
               onRefresh={loadFolderTracks}
               onLogin={login}
               onOpenLocations={() => setIsLocationModalOpen(true)}
@@ -522,7 +567,7 @@ export default function App() {
             error={tracksError}
             isAuthenticated={isAuthenticated}
             onSelectTrack={handleSelectTrack}
-            onTogglePlay={togglePlay}
+            onTogglePlay={handleTogglePlay}
             onRefresh={loadFolderTracks}
             onLogin={login}
             onOpenLocations={() => setIsLocationModalOpen(true)}
@@ -538,11 +583,12 @@ export default function App() {
       <MiniPlayerBar
         activeTrack={activeTrack}
         isPlaying={isPlaying}
-        onTogglePlay={togglePlay}
+        onTogglePlay={handleTogglePlay}
         onMaximize={() => setActiveTab('home')}
         isFavorite={favorites.has(activeTrack?.id)}
         onToggleFavorite={handleToggleFavorite}
         showOnDesktop={activeTab !== 'home'}
+        isAuthenticated={isAuthenticated}
       />
 
       {/* Drive Locations Management Modal */}

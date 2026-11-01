@@ -9,6 +9,7 @@ import {
   FolderOpen,
   FileAudio,
   Check,
+  Loader2,
 } from 'lucide-react';
 import { formatTime } from '../utils/formatters';
 
@@ -19,7 +20,7 @@ export default function TrackList({
   isLoadingTracks,
   isBuffering: _isBuffering,
   error,
-  isAuthenticated: _isAuthenticated,
+  isAuthenticated = false,
   onSelectTrack,
   onTogglePlay,
   onRefresh,
@@ -121,9 +122,11 @@ export default function TrackList({
         {/* Section Header: Title on Left, Sort by on Right */}
         <div className="qw-songs-header">
           <div className="qw-songs-title-wrap">
-            <h2 className="qw-songs-title">All Songs</h2>
+            <h2 className="qw-songs-title">
+              {isAuthenticated ? 'Google Drive Songs' : 'All Songs'}
+            </h2>
             <span className="qw-songs-total-count">
-              ({filteredAndSortedTracks.length})
+              ({isLoadingTracks ? 'Scanning...' : filteredAndSortedTracks.length})
             </span>
           </div>
 
@@ -226,13 +229,37 @@ export default function TrackList({
           })}
         </div>
 
+        {/* Prominent Drive Loading Indicator */}
+        {isLoadingTracks && (
+          <div className="qw-loading-drive-box">
+            <Loader2 size={36} className="spin-fast text-gold" />
+            <div className="qw-loading-drive-info">
+              <h3 className="qw-loading-drive-title">
+                {isAuthenticated ? 'Connecting to Google Drive...' : 'Scanning audio library...'}
+              </h3>
+              <p className="qw-loading-drive-subtitle">
+                Scanning your folder for audio tracks. Please wait a moment...
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Library Scan Error Notice */}
-        {error && (
+        {error && !isLoadingTracks && (
           <div className="qw-notice-banner">
             <span>{error}</span>
-            <button type="button" className="qw-btn-notice-retry" onClick={onRefresh}>
-              Retry
-            </button>
+            <div className="qw-notice-actions">
+              {onRefresh && (
+                <button type="button" className="qw-btn-notice-retry" onClick={onRefresh}>
+                  Retry
+                </button>
+              )}
+              {onOpenLocations && (
+                <button type="button" className="qw-btn-notice-retry" onClick={onOpenLocations}>
+                  Switch Folder
+                </button>
+              )}
+            </div>
           </div>
         )}
 
@@ -255,33 +282,51 @@ export default function TrackList({
         {!isLoadingTracks && filteredAndSortedTracks.length === 0 && (
           <div className="qw-empty-state">
             <FileAudio size={42} className="qw-empty-icon" />
-            <h3 className="qw-empty-title">No Qawwalis Found</h3>
+            <h3 className="qw-empty-title">
+              {error ? 'Unable to Load Songs' : 'No Audio Files Found'}
+            </h3>
             <p className="qw-empty-desc">
-              {searchQuery
+              {error
+                ? error
+                : searchQuery
                 ? `No results matching "${searchQuery}".`
                 : selectedTag === 'Favorites'
                 ? 'You have not added any Qawwalis to your favorites yet. Click the heart icon on any song to add it here.'
+                : isAuthenticated
+                ? 'Your connected Google Drive folder does not contain any audio files (.mp3, .wav, .m4a) yet. Please upload songs to the folder or switch to another folder.'
                 : 'No tracks available in this category.'}
             </p>
-            {selectedTag === 'Favorites' && (
-              <button
-                type="button"
-                className="qw-btn-gold-sm"
-                onClick={() => setSelectedTag('All')}
-              >
-                Show All Songs
-              </button>
-            )}
-            {onOpenLocations && (
-              <button
-                type="button"
-                className="qw-btn-subtle-sm"
-                onClick={onOpenLocations}
-              >
-                <FolderOpen size={14} />
-                <span>Switch Drive Folder</span>
-              </button>
-            )}
+            <div className="qw-empty-actions">
+              {selectedTag === 'Favorites' && (
+                <button
+                  type="button"
+                  className="qw-btn-gold-sm"
+                  onClick={() => setSelectedTag('All')}
+                >
+                  Show All Songs
+                </button>
+              )}
+              {onRefresh && (
+                <button
+                  type="button"
+                  className="qw-btn-gold-sm"
+                  onClick={onRefresh}
+                >
+                  <RefreshCw size={14} />
+                  <span>Retry Scanning</span>
+                </button>
+              )}
+              {onOpenLocations && (
+                <button
+                  type="button"
+                  className="qw-btn-subtle-sm"
+                  onClick={onOpenLocations}
+                >
+                  <FolderOpen size={14} />
+                  <span>Switch Drive Folder</span>
+                </button>
+              )}
+            </div>
           </div>
         )}
 

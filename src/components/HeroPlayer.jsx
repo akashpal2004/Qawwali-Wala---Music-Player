@@ -22,6 +22,9 @@ export default function HeroPlayer({
   isPlaying,
   isBuffering,
   isStreamLoading,
+  isLoadingTracks = false,
+  isAuthenticated = false,
+  tracksCount = 0,
   currentTime,
   duration,
   volume,
@@ -85,9 +88,31 @@ export default function HeroPlayer({
     }, 200);
   };
 
-  const currentTitle = activeTrack?.title || 'Tere Ishq Nachaya';
-  const currentArtist = activeTrack?.artist || 'Ustad Nusrat Fateh Ali Khan';
-  const currentCover = activeTrack?.cover || '/cover-tere-ishq.jpg';
+  let currentTitle = 'Tere Ishq Nachaya';
+  let currentArtist = 'Ustad Nusrat Fateh Ali Khan';
+  let currentCover = '/cover-tere-ishq.jpg';
+
+  if (isAuthenticated) {
+    if (isLoadingTracks) {
+      currentTitle = 'Loading Google Drive Music...';
+      currentArtist = 'Scanning your folder for audio tracks...';
+      currentCover = '/hero-player-thumb.jpg';
+    } else if (tracksCount === 0) {
+      currentTitle = 'No Music Found in Drive Folder';
+      currentArtist = 'Add MP3 files or choose another folder';
+      currentCover = '/hero-player-thumb.jpg';
+    } else if (activeTrack) {
+      currentTitle = activeTrack.title || 'Untitled Track';
+      currentArtist = activeTrack.artist || 'Google Drive';
+      currentCover = activeTrack.cover || '/hero-player-thumb.jpg';
+    }
+  } else if (activeTrack) {
+    currentTitle = activeTrack.title;
+    currentArtist = activeTrack.artist;
+    currentCover = activeTrack.cover || '/cover-tere-ishq.jpg';
+  }
+
+  const canPlay = !isLoadingTracks && (activeTrack !== null || !isAuthenticated) && (!isAuthenticated || tracksCount > 0);
 
   const trackDuration = duration || activeTrack?.duration || 372;
   const progressPercent = trackDuration > 0
@@ -201,11 +226,11 @@ export default function HeroPlayer({
                 type="button"
                 className="qw-play-circle-btn"
                 onClick={onTogglePlay}
-                disabled={isStreamLoading}
+                disabled={!canPlay || isStreamLoading}
                 title={isPlaying ? 'Pause' : 'Play'}
                 aria-label={isPlaying ? 'Pause' : 'Play'}
               >
-                {isStreamLoading || isBuffering ? (
+                {isLoadingTracks || isStreamLoading || isBuffering ? (
                   <Loader2 size={22} className="spin-fast text-dark" />
                 ) : isPlaying ? (
                   <Pause size={22} className="text-dark" />
@@ -386,10 +411,10 @@ export default function HeroPlayer({
               type="button"
               className="qw-play-circle-btn"
               onClick={onTogglePlay}
-              disabled={isStreamLoading}
+              disabled={!canPlay || isStreamLoading}
               aria-label={isPlaying ? 'Pause' : 'Play'}
             >
-              {isStreamLoading || isBuffering ? (
+              {isLoadingTracks || isStreamLoading || isBuffering ? (
                 <Loader2 size={24} className="spin-fast text-dark" />
               ) : isPlaying ? (
                 <Pause size={24} className="text-dark" />

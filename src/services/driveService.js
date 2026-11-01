@@ -58,18 +58,20 @@ export async function fetchDriveAudioFiles(folderId, accessToken) {
   const cleanFolderId = extractDriveFolderId(folderId);
 
   if (!cleanFolderId) {
-    throw new Error('Google Drive Folder ID is required.');
+    throw new Error('Google Drive Folder ID is required. Please check your folder settings.');
   }
   if (!accessToken) {
-    throw new Error('Google OAuth access token is required.');
+    throw new Error('Google OAuth access token is required. Please connect your Google Drive.');
   }
 
-  // Exact query specifying parent folder, audio mimeType, and excluding trashed files
-  const query = `'${cleanFolderId}' in parents and (mimeType = 'audio/mpeg' or mimeType = 'audio/mp3') and trashed = false`;
+  console.log(`[Google Drive] Scanning folder ID: "${cleanFolderId}"...`);
+
+  // Query all non-trashed items inside the target folder
+  const query = `'${cleanFolderId}' in parents and trashed = false`;
 
   const params = new URLSearchParams({
     q: query,
-    fields: 'files(id, name, size, mimeType, modifiedTime)',
+    fields: 'files(id, name, size, mimeType, modifiedTime, thumbnailLink)',
     orderBy: 'name',
     pageSize: '1000',
     supportsAllDrives: 'true',
@@ -87,7 +89,7 @@ export async function fetchDriveAudioFiles(folderId, accessToken) {
   });
 
   if (!response.ok) {
-    let errorMessage = `Failed to fetch files (HTTP ${response.status})`;
+    let errorMessage = `Failed to fetch files from Google Drive (HTTP ${response.status})`;
     try {
       const errData = await response.json();
       if (errData.error?.message) {
@@ -98,20 +100,71 @@ export async function fetchDriveAudioFiles(folderId, accessToken) {
     }
 
     if (response.status === 401) {
-      throw new Error('OAuth token expired or invalid. Please sign in again.');
+      throw new Error('OAuth token expired or invalid. Please reconnect your Google Drive.');
+    }
+    if (response.status === 403) {
+      throw new Error(`Permission denied for folder "${cleanFolderId}". Please ensure the folder is shared with read access or your account has permission.`);
     }
     if (response.status === 404) {
-      throw new Error(`Folder with ID "${folderId}" was not found or is inaccessible.`);
+      throw new Error(`Google Drive folder "${cleanFolderId}" was not found. Please verify the Folder ID.`);
     }
     throw new Error(errorMessage);
   }
 
   const data = await response.json();
-  const files = data.files || [];
+  const rawItems = data.files || [];
+  console.log(`[Google Drive] Found ${rawItems.length} total items in root folder.`);
 
-  return files.map((file) => {
+  const audioExtensions = /\.(mp3|wav|m4a|aac|ogg|flac|opus|wma|aiff)$/i;
+
+  // Filter for audio files directly in root folder
+  let audioFiles = rawItems.filter((file) => {
+    return file.mimeType?.startsWith('audio/') || audioExtensions.test(file.name);
+  });
+
+  // If no audio files directly in root folder, check if there are subfolders (e.g. artist or album folders)
+  if (audioFiles.length === 0) {
+    const subfolders = rawItems.filter(
+      (f) => f.mimeType === 'application/vnd.google-apps.folder'
+    );
+    if (subfolders.length > 0) {
+      console.log(`[Google Drive] Root folder has ${subfolders.length} subfolders. Scanning subfolders for audio files...`);
+      const subResults = await Promise.all(
+        subfolders.slice(0, 15).map(async (folder) => {
+          try {
+            const subParams = new URLSearchParams({
+              q: `'${folder.id}' in parents and trashed = false`,
+              fields: 'files(id, name, size, mimeType, modifiedTime, thumbnailLink)',
+              orderBy: 'name',
+              pageSize: '1000',
+              supportsAllDrives: 'true',
+              includeItemsFromAllDrives: 'true',
+            });
+            const subRes = await fetch(`${DRIVE_API_BASE}?${subParams.toString()}`, {
+              headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+            });
+            if (subRes.ok) {
+              const subData = await subRes.json();
+              return (subData.files || []).filter(
+                (f) => f.mimeType?.startsWith('audio/') || audioExtensions.test(f.name)
+              );
+            }
+          } catch (e) {
+            console.warn(`Failed scanning subfolder "${folder.name}":`, e);
+          }
+          return [];
+        })
+      );
+      audioFiles = subResults.flat();
+      console.log(`[Google Drive] Found ${audioFiles.length} audio files inside subfolders.`);
+    }
+  }
+
+  console.log(`[Google Drive] Returning ${audioFiles.length} total audio tracks.`);
+
+  return audioFiles.map((file) => {
     const cleanTitle = cleanTrackTitle(file.name);
-    let artist = 'Nexora';
+    let artist = 'Google Drive';
     let title = cleanTitle;
     if (cleanTitle.includes(' - ')) {
       const parts = cleanTitle.split(' - ');
@@ -123,13 +176,14 @@ export async function fetchDriveAudioFiles(folderId, accessToken) {
       name: file.name,
       title: title || cleanTitle,
       artist: artist,
-      genre: 'Chill',
+      genre: 'Sufi / Qawwali',
       year: file.modifiedTime ? new Date(file.modifiedTime).getFullYear().toString() : '2024',
       size: parseInt(file.size, 10) || 0,
       formattedSize: formatBytes(file.size),
       mimeType: file.mimeType,
       modifiedTime: file.modifiedTime,
-      cover: '/cover-better-days.png',
+      cover: file.thumbnailLink || '/cover-tere-ishq.jpg',
+      isDemo: false,
     };
   });
 }

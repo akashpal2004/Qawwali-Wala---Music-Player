@@ -9,8 +9,10 @@ export default function MiniPlayerBar({
   isFavorite,
   onToggleFavorite,
   showOnDesktop = false,
+  isAuthenticated = false,
 }) {
   if (!activeTrack) return null;
+  if (isAuthenticated && activeTrack.isDemo) return null;
 
   const currentTitle = activeTrack.title || 'Tere Ishq Nachaya';
   const currentArtist = activeTrack.artist || 'Ustad Nusrat Fateh Ali Khan';
