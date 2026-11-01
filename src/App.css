@@ -48,7 +48,7 @@
   gap: 20px;
 }
 
-/* Brand Logo (Stacked Arch Crest + Elegant Serif) */
+/* Brand Logo */
 .qw-brand-wrap {
   display: flex;
   align-items: center;
@@ -63,49 +63,18 @@
   transform: translateY(-1px);
 }
 
-.qw-navbar-brand-lockup {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
+.qw-navbar-logo-img {
+  height: 42px;
+  width: auto;
+  max-width: 140px;
+  object-fit: contain;
+  display: block;
+  filter: drop-shadow(0 2px 8px rgba(217, 168, 91, 0.22));
+  transition: filter 0.2s ease, transform 0.2s ease;
 }
 
-.qw-navbar-brand-lockup .qw-logo-crest {
-  width: 26px;
-  height: 13px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  color: var(--color-accent);
-}
-
-.qw-arch-svg {
-  width: 100%;
-  height: 100%;
-}
-
-.qw-brand-stacked-text {
-  display: flex;
-  flex-direction: column;
-  line-height: 0.92;
-}
-
-.qw-brand-stacked-qawwali {
-  font-family: var(--font-brand);
-  font-size: 0.96rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  color: #F8EFE4;
-  text-transform: uppercase;
-}
-
-.qw-brand-stacked-wala {
-  font-family: var(--font-serif);
-  font-size: 0.88rem;
-  font-weight: 600;
-  font-style: italic;
-  letter-spacing: 0.02em;
-  color: var(--color-accent);
+.qw-brand-wrap:hover .qw-navbar-logo-img {
+  filter: drop-shadow(0 2px 14px rgba(217, 168, 91, 0.4));
 }
 
 /* Center Nav Links */
@@ -1732,6 +1701,13 @@
 .qw-arch-mini {
   width: 24px;
   height: 14px;
+}
+
+.qw-modal-brand-logo {
+  height: 28px;
+  width: auto;
+  object-fit: contain;
+  display: block;
 }
 
 .qw-modal-title,

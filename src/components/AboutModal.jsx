@@ -10,16 +10,8 @@ export default function AboutModal({ isOpen, onClose }) {
         {/* Header */}
         <div className="qw-modal-header">
           <div className="qw-modal-title-wrap">
-            {/* Sufi Arch Crest */}
-            <svg viewBox="0 0 48 24" fill="none" className="qw-arch-mini">
-              <path
-                d="M 4 22 L 14 22 C 14 16, 17 12, 20 9 C 22.5 6, 23.5 3, 24 2 C 24.5 3, 25.5 6, 28 9 C 31 12, 34 16, 34 22 L 44 22"
-                stroke="#D9A85B"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-              />
-            </svg>
-            <h3 className="qw-modal-title">About Qawwali Wala</h3>
+            <img src="/logo.png" alt="Qawwali Wala" className="qw-modal-brand-logo" />
+            <h3 className="qw-modal-title">About</h3>
           </div>
           <button
             type="button"

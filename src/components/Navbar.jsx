@@ -50,7 +50,7 @@ export default function Navbar({
   return (
     <header className="qw-navbar">
       <div className="qw-navbar-inner">
-        {/* Left: Brand Logo (Stacked Arch Crest + Serif Name) */}
+        {/* Left: Brand Logo */}
         <div
           className="qw-brand-wrap"
           onClick={() => onTabChange('home')}
@@ -58,23 +58,11 @@ export default function Navbar({
           tabIndex={0}
           aria-label="Qawwali Wala Home"
         >
-          <div className="qw-navbar-brand-lockup">
-            <div className="qw-logo-crest" aria-hidden="true">
-              <svg viewBox="0 0 36 20" fill="none" className="qw-arch-svg">
-                <path
-                  d="M 3 18 C 7 12, 13 5, 18 2 C 23 5, 29 12, 33 18"
-                  stroke="#D9A85B"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                />
-                <circle cx="18" cy="2" r="1.6" fill="#D9A85B" />
-              </svg>
-            </div>
-            <div className="qw-brand-stacked-text">
-              <span className="qw-brand-stacked-qawwali">Qawwali</span>
-              <span className="qw-brand-stacked-wala">Wala</span>
-            </div>
-          </div>
+          <img
+            src="/logo.png"
+            alt="Qawwali Wala"
+            className="qw-navbar-logo-img"
+          />
         </div>
 
         {/* Center: Navigation Links (Home, Explore, About) */}
