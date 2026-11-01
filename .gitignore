@@ -1,0 +1,196 @@
+# ==============================================================================
+# Production-ready .gitignore
+# Project: Music Player (React / Vite / Node.js)
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Secrets & Environment Variables
+# ------------------------------------------------------------------------------
+# Exclude all environment variable configurations and local overrides
+.env
+.env.*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Preserve example environment template files
+!.env.example
+!.env.*.example
+
+# Private keys, certificates, and auth credentials
+*.pem
+*.key
+*.cer
+*.crt
+*.p12
+*.pfx
+*.pkcs12
+*.keystore
+*.jks
+
+# Cloud provider, OAuth, and API credentials (e.g. Google Cloud / Firebase)
+credentials.json
+client_secret*.json
+client_secrets.json
+service-account*.json
+firebase-adminsdk*.json
+
+# SSH keys
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+*.id_rsa
+
+# ------------------------------------------------------------------------------
+# 2. Dependencies
+# ------------------------------------------------------------------------------
+# Node / JavaScript
+node_modules/
+jspm_packages/
+web_modules/
+.pnp/
+.pnp.js
+
+# Python (virtual environments)
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# PHP / Composer
+vendor/
+
+# Ruby / Bundler
+.bundle/
+
+# ------------------------------------------------------------------------------
+# 3. Build Artifacts & Output Folders
+# ------------------------------------------------------------------------------
+dist/
+dist-ssr/
+build/
+out/
+bin/
+obj/
+.output/
+
+# ------------------------------------------------------------------------------
+# 4. Framework Caches & Build Caches
+# ------------------------------------------------------------------------------
+# Vite & Bundler caches
+.vite/
+.vite-temp/
+.parcel-cache/
+.turbo/
+.cache/
+
+# Modern web framework caches
+.next/
+.nuxt/
+.astro/
+.svelte-kit/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Linter & type-check caches
+*.tsbuildinfo
+.eslintcache
+.oxlintcache
+.stylelintcache
+.prettiercache
+
+# ------------------------------------------------------------------------------
+# 5. Testing & Code Coverage
+# ------------------------------------------------------------------------------
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+cypress/videos/
+cypress/screenshots/
+
+# ------------------------------------------------------------------------------
+# 6. Logs & Debug Outputs
+# ------------------------------------------------------------------------------
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+rush-debug.log*
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# ------------------------------------------------------------------------------
+# 7. Temporary & Backup Files
+# ------------------------------------------------------------------------------
+tmp/
+temp/
+*.tmp
+*.temp
+*~
+*.bak
+*.swp
+*.swo
+*.swn
+*.pid
+*.pid.lock
+*.seed
+*.crash
+
+# ------------------------------------------------------------------------------
+# 8. OS-Specific Metadata
+# ------------------------------------------------------------------------------
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.directory
+.fuse_hidden*
+
+# ------------------------------------------------------------------------------
+# 9. IDEs & Editor Configuration
+# ------------------------------------------------------------------------------
+# VS Code
+.vscode/
+
+# JetBrains / IntelliJ IDEA / WebStorm
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# Visual Studio
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Sublime Text
+*.sublime-workspace
+*.sublime-project
