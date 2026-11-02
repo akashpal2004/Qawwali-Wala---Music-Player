@@ -90,26 +90,26 @@ export default function HeroPlayer({
 
   let currentTitle = 'Tere Ishq Nachaya';
   let currentArtist = 'Ustad Nusrat Fateh Ali Khan';
-  let currentCover = '/cover-tere-ishq.jpg';
+  let currentCover = '/nusrat-all-songs.jpg';
 
   if (isAuthenticated) {
     if (isLoadingTracks) {
       currentTitle = 'Loading Google Drive Music...';
       currentArtist = 'Scanning your folder for audio tracks...';
-      currentCover = '/hero-player-thumb.jpg';
+      currentCover = '/nusrat-all-songs.jpg';
     } else if (tracksCount === 0) {
       currentTitle = 'No Music Found in Drive Folder';
       currentArtist = 'Add MP3 files or choose another folder';
-      currentCover = '/hero-player-thumb.jpg';
+      currentCover = '/nusrat-all-songs.jpg';
     } else if (activeTrack) {
       currentTitle = activeTrack.title || 'Untitled Track';
-      currentArtist = activeTrack.artist || 'Google Drive';
-      currentCover = activeTrack.cover || '/hero-player-thumb.jpg';
+      currentArtist = activeTrack.artist || 'Ustad Nusrat Fateh Ali Khan';
+      currentCover = activeTrack.cover || '/nusrat-all-songs.jpg';
     }
   } else if (activeTrack) {
     currentTitle = activeTrack.title;
     currentArtist = activeTrack.artist;
-    currentCover = activeTrack.cover || '/cover-tere-ishq.jpg';
+    currentCover = activeTrack.cover || '/nusrat-all-songs.jpg';
   }
 
   const canPlay = !isLoadingTracks && (activeTrack !== null || !isAuthenticated) && (!isAuthenticated || tracksCount > 0);

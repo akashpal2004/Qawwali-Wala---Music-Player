@@ -10,10 +10,17 @@ import { useAudioPlayback } from './hooks/useAudioPlayback';
 import { DEFAULT_DEMO_TRACKS } from './utils/demoTracks';
 import {
   fetchDriveAudioFiles,
-  streamTrackAudio,
   revokeAudioStream,
   extractDriveFolderId,
+  parseAudioFileMetadata,
 } from './services/driveService';
+import {
+  preloadTrack,
+  getTrackAudioUrl,
+  getCachedBlobUrl,
+  evictOldBlobs,
+  clearAudioCache,
+} from './services/audioPreloader';
 import './App.css';
 
 const DEFAULT_LOCATIONS_KEY = 'sonic_drive_locations_v2';
@@ -121,7 +128,20 @@ export default function App() {
         const saved = localStorage.getItem(CACHED_TRACKS_KEY);
         if (saved) {
           const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed.map((t) => {
+              if (t.artist === 'Google Drive' || !t.cover || t.cover.includes('cover-tere-ishq')) {
+                const { artistName, songName } = parseAudioFileMetadata(t.name || t.title);
+                return {
+                  ...t,
+                  title: artistName,
+                  artist: songName,
+                  cover: '/nusrat-all-songs.jpg',
+                };
+              }
+              return t;
+            });
+          }
         }
       }
     } catch (e) {
@@ -142,8 +162,17 @@ export default function App() {
           const parsed = JSON.parse(savedTracks);
           if (Array.isArray(parsed) && parsed.length > 0) {
             const savedActiveId = localStorage.getItem(ACTIVE_TRACK_ID_KEY);
-            const found = parsed.find((t) => t.id === savedActiveId);
-            return found || parsed[0];
+            let found = parsed.find((t) => t.id === savedActiveId) || parsed[0];
+            if (found && (found.artist === 'Google Drive' || !found.cover || found.cover.includes('cover-tere-ishq'))) {
+              const { artistName, songName } = parseAudioFileMetadata(found.name || found.title);
+              found = {
+                ...found,
+                title: artistName,
+                artist: songName,
+                cover: '/nusrat-all-songs.jpg',
+              };
+            }
+            return found;
           }
         }
         return null;
@@ -153,11 +182,15 @@ export default function App() {
     }
     return DEFAULT_DEMO_TRACKS[0];
   });
+
   const [audioSrc, setAudioSrc] = useState(null);
   const [isStreamLoading, setIsStreamLoading] = useState(false);
 
   // Active blob url reference for garbage collection
   const activeBlobUrlRef = useRef(null);
+
+  // Reference for upcoming shuffle track so preloaded track matches next playback
+  const upcomingShuffleTrackRef = useRef(null);
 
   // Save locations when modified
   const saveLocations = (newLocs) => {
@@ -171,6 +204,8 @@ export default function App() {
 
   const handleSelectLocation = (locId) => {
     setActiveLocationId(locId);
+    clearAudioCache();
+    cleanupCurrentAudioStream();
     try {
       localStorage.setItem(ACTIVE_LOCATION_KEY, locId);
     } catch (e) {
@@ -213,17 +248,27 @@ export default function App() {
   useEffect(() => {
     return () => {
       cleanupCurrentAudioStream();
+      clearAudioCache();
     };
   }, [cleanupCurrentAudioStream]);
 
   /**
-   * Select and stream track
+   * Combined tracks list: when connected to Drive, STRICTLY return Drive tracks (never demo tracks!)
+   */
+  const currentTrackList = useMemo(() => {
+    if (isAuthenticated) {
+      return driveTracks;
+    }
+    return DEFAULT_DEMO_TRACKS;
+  }, [isAuthenticated, driveTracks]);
+
+  /**
+   * Select and stream track with zero-latency preloaded audio support
    */
   const handleSelectTrack = useCallback(
     async (track) => {
       if (!track) return;
 
-      cleanupCurrentAudioStream();
       setActiveTrack(track);
 
       // SAFETY: If connected to Drive, NEVER allow playing any demo track or wav!
@@ -241,22 +286,40 @@ export default function App() {
         }
       }
 
-      // If previewing demo track when NOT authenticated
+      // 1. Check if already preloaded in memory cache (ZERO-LATENCY INSTANT SWITCH!)
+      const preloadedUrl = getCachedBlobUrl(track.id);
+      if (preloadedUrl) {
+        activeBlobUrlRef.current = preloadedUrl;
+        setAudioSrc(preloadedUrl);
+        setIsStreamLoading(false);
+        setTracksError(null);
+        evictOldBlobs([track.id]);
+        return;
+      }
+
+      // 2. Demo track when NOT authenticated
       if (track.isDemo || track.src) {
         if (!isAuthenticated) {
-          setAudioSrc(track.src || '/demo-better-days.wav');
+          const src = track.src || '/demo-better-days.wav';
+          activeBlobUrlRef.current = src;
+          setAudioSrc(src);
         }
         return;
       }
 
-      // Stream from Google Drive
+      // 3. Stream from Google Drive (await cache / in-flight preload / fetch)
       if (token) {
         setIsStreamLoading(true);
         try {
-          const blobUrl = await streamTrackAudio(track.id, token);
-          activeBlobUrlRef.current = blobUrl;
-          setAudioSrc(blobUrl);
-          setTracksError(null);
+          const blobUrl = await getTrackAudioUrl(track, token);
+          if (blobUrl) {
+            activeBlobUrlRef.current = blobUrl;
+            setAudioSrc(blobUrl);
+            setTracksError(null);
+            evictOldBlobs([track.id]);
+          } else {
+            throw new Error('Unable to retrieve audio stream');
+          }
         } catch (err) {
           console.error(`Failed to stream track "${track.title}":`, err);
           setTracksError(`Failed to stream "${track.title}". Check folder permissions.`);
@@ -266,8 +329,122 @@ export default function App() {
         }
       }
     },
-    [token, isAuthenticated, cleanupCurrentAudioStream]
+    [token, isAuthenticated]
   );
+
+  /**
+   * Skip Next - Uses preloaded track for seamless transition
+   */
+  const handleNextTrack = useCallback(
+    (isShuffleMode = false) => {
+      if (currentTrackList.length === 0) return;
+      const currentIndex = currentTrackList.findIndex((t) => t.id === activeTrack?.id);
+
+      if (isShuffleMode && currentTrackList.length > 1) {
+        let targetTrack = upcomingShuffleTrackRef.current;
+        if (!targetTrack || targetTrack.id === activeTrack?.id) {
+          const pool = currentTrackList.filter((t) => t.id !== activeTrack?.id);
+          targetTrack = pool[Math.floor(Math.random() * pool.length)];
+        }
+        upcomingShuffleTrackRef.current = null;
+        handleSelectTrack(targetTrack);
+        return;
+      }
+
+      const nextIndex = (currentIndex + 1) % currentTrackList.length;
+      handleSelectTrack(currentTrackList[nextIndex]);
+    },
+    [currentTrackList, activeTrack, handleSelectTrack]
+  );
+
+  /**
+   * Skip Previous
+   */
+  const handlePreviousTrack = useCallback(
+    (isShuffleMode = false) => {
+      if (currentTrackList.length === 0) return;
+      const currentIndex = currentTrackList.findIndex((t) => t.id === activeTrack?.id);
+
+      if (isShuffleMode && currentTrackList.length > 1) {
+        const pool = currentTrackList.filter((t) => t.id !== activeTrack?.id);
+        const randomTrack = pool[Math.floor(Math.random() * pool.length)];
+        handleSelectTrack(randomTrack);
+        return;
+      }
+
+      const prevIndex = (currentIndex - 1 + currentTrackList.length) % currentTrackList.length;
+      handleSelectTrack(currentTrackList[prevIndex]);
+    },
+    [currentTrackList, activeTrack, handleSelectTrack]
+  );
+
+  // Audio Playback Hook with Call Interruption Recovery & MediaSession
+  const {
+    audioRef,
+    isPlaying,
+    setIsPlaying,
+    isBuffering,
+    setIsBuffering,
+    currentTime,
+    setCurrentTime,
+    duration,
+    setDuration,
+    volume,
+    setVolume,
+    isMuted,
+    toggleMute,
+    repeatMode,
+    setRepeatMode,
+    cycleRepeat,
+    isShuffle,
+    toggleShuffle,
+    togglePlay,
+    seek,
+    handleTrackEnded,
+    handleAudioPlay,
+    handleAudioPause,
+    isSeekingRef,
+  } = useAudioPlayback({
+    audioSrc,
+    activeTrack,
+    onNextTrack: handleNextTrack,
+    onPreviousTrack: handlePreviousTrack,
+  });
+
+  /**
+   * PRELOAD NEXT SONG IN BACKGROUND:
+   * While the current song is playing, automatically preload the upcoming song
+   * into memory so when the current song ends, the next song plays instantly!
+   */
+  useEffect(() => {
+    if (!activeTrack || currentTrackList.length <= 1) return;
+
+    let nextTrack = null;
+    if (isShuffle && currentTrackList.length > 1) {
+      if (!upcomingShuffleTrackRef.current || upcomingShuffleTrackRef.current.id === activeTrack.id) {
+        const pool = currentTrackList.filter((t) => t.id !== activeTrack.id);
+        upcomingShuffleTrackRef.current = pool[Math.floor(Math.random() * pool.length)];
+      }
+      nextTrack = upcomingShuffleTrackRef.current;
+    } else {
+      const currentIndex = currentTrackList.findIndex((t) => t.id === activeTrack.id);
+      if (currentIndex >= 0) {
+        const nextIndex = (currentIndex + 1) % currentTrackList.length;
+        nextTrack = currentTrackList[nextIndex];
+      }
+    }
+
+    if (!nextTrack || nextTrack.id === activeTrack.id) return;
+
+    // Small delay (750ms) to ensure current track's playback begins smoothly before preloading
+    const timer = setTimeout(() => {
+      preloadTrack(nextTrack, token).catch((err) => {
+        console.warn('[App] Preloading next track failed:', err);
+      });
+    }, 750);
+
+    return () => clearTimeout(timer);
+  }, [activeTrack, currentTrackList, isShuffle, token]);
 
   /**
    * Fetch tracks from Google Drive
@@ -310,7 +487,6 @@ export default function App() {
   // Handle authentication state changes & folder changes
   useEffect(() => {
     if (isAuthenticated) {
-      // Clear demo audio and demo track immediately when Drive is connected
       if (activeTrack?.isDemo) {
         cleanupCurrentAudioStream();
         setActiveTrack(null);
@@ -319,96 +495,13 @@ export default function App() {
         loadFolderTracks();
       }
     } else {
-      // If user logs out of Drive, reset to initial demo state
+      clearAudioCache();
       setDriveTracks([]);
       setTracksError(null);
       setActiveTrack(DEFAULT_DEMO_TRACKS[0]);
       cleanupCurrentAudioStream();
     }
   }, [isAuthenticated, activeFolderId]);
-
-  // Combined tracks list: when connected to Drive, STRICTLY return Drive tracks (never demo tracks!)
-  const currentTrackList = useMemo(() => {
-    if (isAuthenticated) {
-      return driveTracks;
-    }
-    return DEFAULT_DEMO_TRACKS;
-  }, [isAuthenticated, driveTracks]);
-
-  /**
-   * Skip Next
-   */
-  const handleNextTrack = useCallback(
-    (isShuffle = false) => {
-      if (currentTrackList.length === 0) return;
-      const currentIndex = currentTrackList.findIndex((t) => t.id === activeTrack?.id);
-
-      if (isShuffle && currentTrackList.length > 1) {
-        let randomIndex = Math.floor(Math.random() * currentTrackList.length);
-        while (randomIndex === currentIndex) {
-          randomIndex = Math.floor(Math.random() * currentTrackList.length);
-        }
-        handleSelectTrack(currentTrackList[randomIndex]);
-        return;
-      }
-
-      const nextIndex = (currentIndex + 1) % currentTrackList.length;
-      handleSelectTrack(currentTrackList[nextIndex]);
-    },
-    [currentTrackList, activeTrack, handleSelectTrack]
-  );
-
-  /**
-   * Skip Previous
-   */
-  const handlePreviousTrack = useCallback(
-    (isShuffle = false) => {
-      if (currentTrackList.length === 0) return;
-      const currentIndex = currentTrackList.findIndex((t) => t.id === activeTrack?.id);
-
-      if (isShuffle && currentTrackList.length > 1) {
-        let randomIndex = Math.floor(Math.random() * currentTrackList.length);
-        while (randomIndex === currentIndex) {
-          randomIndex = Math.floor(Math.random() * currentTrackList.length);
-        }
-        handleSelectTrack(currentTrackList[randomIndex]);
-        return;
-      }
-
-      const prevIndex = (currentIndex - 1 + currentTrackList.length) % currentTrackList.length;
-      handleSelectTrack(currentTrackList[prevIndex]);
-    },
-    [currentTrackList, activeTrack, handleSelectTrack]
-  );
-
-  // Audio Playback Hook
-  const {
-    audioRef,
-    isPlaying,
-    setIsPlaying,
-    isBuffering,
-    setIsBuffering,
-    currentTime,
-    setCurrentTime,
-    duration,
-    setDuration,
-    volume,
-    setVolume,
-    isMuted,
-    toggleMute,
-    repeatMode,
-    setRepeatMode,
-    cycleRepeat,
-    isShuffle,
-    toggleShuffle,
-    togglePlay,
-    seek,
-    handleTrackEnded,
-    isSeekingRef,
-  } = useAudioPlayback({
-    audioSrc,
-    onNextTrack: handleNextTrack,
-  });
 
   // Safe play toggle that fetches audio if not yet loaded
   const handleTogglePlay = useCallback(() => {
@@ -421,6 +514,7 @@ export default function App() {
   }, [isAuthenticated, audioSrc, activeTrack, handleSelectTrack, togglePlay]);
 
   const handleLogout = () => {
+    clearAudioCache();
     cleanupCurrentAudioStream();
     setDriveTracks([]);
     setActiveTrack(DEFAULT_DEMO_TRACKS[0]);
@@ -457,10 +551,10 @@ export default function App() {
 
   return (
     <div className="qw-app-root">
-      {/* Hidden HTML5 Audio Element */}
+      {/* Hidden HTML5 Audio Element with auto-preload & interruption recovery */}
       <audio
         ref={audioRef}
-        preload="metadata"
+        preload="auto"
         onTimeUpdate={() => {
           if (!isSeekingRef.current && audioRef.current) {
             setCurrentTime(audioRef.current.currentTime);
@@ -476,7 +570,8 @@ export default function App() {
           setIsBuffering(false);
           setIsPlaying(true);
         }}
-        onPause={() => setIsPlaying(false)}
+        onPlay={handleAudioPlay}
+        onPause={handleAudioPause}
         onEnded={handleTrackEnded}
         onError={(e) => {
           console.warn('Audio playback error:', e);

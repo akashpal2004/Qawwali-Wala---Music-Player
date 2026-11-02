@@ -17,6 +17,107 @@ export function formatBytes(bytes, decimals = 1) {
 }
 
 /**
+ * Extract clean song name and artist from audio file names.
+ * Supports pipe '|', dash '-', en-dash '–', em-dash '—', and artist keyword detection.
+ */
+export function parseAudioFileMetadata(fileName) {
+  const clean = cleanTrackTitle(fileName);
+
+  const cleanText = (str) => {
+    return str
+      .replace(/\s*[([\[](official\s*(video|audio|hd\s*video)?|full\s*song|hq|lyrics|complete\s*full\s*version|osa\s*official\s*hd\s*video|hd|audio)[)\]]/gi, '')
+      .replace(/\s+(lyrics\s+in\s+description|complete\s+full\s+version|full\s+song|official\s+video)$/i, '')
+      .trim();
+  };
+
+  const knownArtists = [
+    'Ustad Nusrat Fateh Ali Khan',
+    'Nusrat Fateh Ali Khan',
+    'Sabri Brothers',
+    'Rahat Fateh Ali Khan',
+    'Abida Parveen',
+    'Amjad Sabri',
+    'Aziz Mian Qawwal',
+  ];
+
+  let songName = '';
+  let artistName = '';
+
+  // 1. Pipe-separated: e.g. "Ae Wadah Shikan | Nusrat Fateh Ali Khan | complete full version"
+  if (clean.includes('|')) {
+    const parts = clean.split('|').map((p) => p.trim()).filter(Boolean);
+    const artistIndex = parts.findIndex((p) =>
+      knownArtists.some((ka) => p.toLowerCase().includes(ka.toLowerCase())) ||
+      /nusrat|sabri|rahat|qawwal|khan/i.test(p)
+    );
+    if (artistIndex === 1) {
+      songName = cleanText(parts[0]);
+      artistName = parts[1];
+    } else if (artistIndex === 0) {
+      artistName = parts[0];
+      songName = cleanText(parts[1]);
+    } else {
+      songName = cleanText(parts[0]);
+      artistName = parts[1] || 'Ustad Nusrat Fateh Ali Khan';
+    }
+  }
+  // 2. Dash-separated: hyphen (-), en-dash (–), or em-dash (—)
+  else if (/(\s+[-–—]\s+|\s+[-–—]|[-–—]\s+)/.test(clean)) {
+    const parts = clean.split(/\s*[-–—]\s*/).map((p) => p.trim()).filter(Boolean);
+    if (parts.length >= 2) {
+      const isPart0Artist = knownArtists.some((ka) => parts[0].toLowerCase().includes(ka.toLowerCase())) ||
+        /^(ustad|sabri|qawwal)/i.test(parts[0]) ||
+        /osa\s*official/i.test(parts[0]);
+      const isPart1Artist = knownArtists.some((ka) => parts[1].toLowerCase().includes(ka.toLowerCase())) ||
+        /^(ustad|sabri|qawwal)/i.test(parts[1]) ||
+        /osa\s*official/i.test(parts[1]);
+
+      if (isPart1Artist && !isPart0Artist) {
+        songName = cleanText(parts[0]);
+        artistName = parts[1];
+      } else if (isPart0Artist && !isPart1Artist) {
+        artistName = parts[0];
+        songName = cleanText(parts.slice(1).join(' - '));
+      } else {
+        songName = cleanText(parts[0]);
+        artistName = parts.slice(1).join(' - ');
+      }
+    } else {
+      songName = cleanText(clean);
+      artistName = 'Ustad Nusrat Fateh Ali Khan';
+    }
+  }
+  // 3. String contains known artist without separator
+  else {
+    const matchedArtist = knownArtists.find((ka) => clean.toLowerCase().includes(ka.toLowerCase())) ||
+      (clean.match(/Nusrat\s+Fateh\s+Ali\s+Khan/i) ? 'Nusrat Fateh Ali Khan' : null);
+
+    if (matchedArtist) {
+      const regex = new RegExp(matchedArtist, 'i');
+      const parts = clean.split(regex);
+      songName = cleanText(parts[0]);
+      artistName = matchedArtist;
+      if (!songName && parts[1]) {
+        songName = cleanText(parts[1]);
+      }
+    } else {
+      songName = cleanText(clean);
+      artistName = 'Ustad Nusrat Fateh Ali Khan';
+    }
+  }
+
+  // Never allow empty or 'Google Drive'
+  if (!songName || songName.toLowerCase() === 'google drive') {
+    songName = cleanText(clean) || 'Sufi Qawwali';
+  }
+  if (!artistName || artistName.toLowerCase() === 'google drive') {
+    artistName = 'Ustad Nusrat Fateh Ali Khan';
+  }
+
+  return { artistName, songName };
+}
+
+/**
  * Strip common audio file extensions for cleaner title display
  */
 export function cleanTrackTitle(fileName) {
@@ -163,26 +264,19 @@ export async function fetchDriveAudioFiles(folderId, accessToken) {
   console.log(`[Google Drive] Returning ${audioFiles.length} total audio tracks.`);
 
   return audioFiles.map((file) => {
-    const cleanTitle = cleanTrackTitle(file.name);
-    let artist = 'Google Drive';
-    let title = cleanTitle;
-    if (cleanTitle.includes(' - ')) {
-      const parts = cleanTitle.split(' - ');
-      artist = parts[0].trim();
-      title = parts.slice(1).join(' - ').trim();
-    }
+    const { artistName, songName } = parseAudioFileMetadata(file.name);
     return {
       id: file.id,
       name: file.name,
-      title: title || cleanTitle,
-      artist: artist,
+      title: artistName,
+      artist: songName,
       genre: 'Sufi / Qawwali',
       year: file.modifiedTime ? new Date(file.modifiedTime).getFullYear().toString() : '2024',
       size: parseInt(file.size, 10) || 0,
       formattedSize: formatBytes(file.size),
       mimeType: file.mimeType,
       modifiedTime: file.modifiedTime,
-      cover: file.thumbnailLink || '/cover-tere-ishq.jpg',
+      cover: '/nusrat-all-songs.jpg',
       isDemo: false,
     };
   });

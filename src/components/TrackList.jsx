@@ -69,17 +69,21 @@ export default function TrackList({
       result = result.filter((t) => favorites.has(t.id));
     } else if (selectedTag === 'Nusrat Fateh Ali Khan') {
       result = result.filter((t) =>
-        t.artist?.toLowerCase().includes('nusrat')
+        t.artist?.toLowerCase().includes('nusrat') ||
+        t.title?.toLowerCase().includes('nusrat')
       );
     } else if (selectedTag === 'Sabri Brothers') {
       result = result.filter((t) =>
-        t.artist?.toLowerCase().includes('sabri')
+        t.artist?.toLowerCase().includes('sabri') ||
+        t.title?.toLowerCase().includes('sabri')
       );
     } else if (selectedTag === 'Modern Qawwals') {
       result = result.filter(
         (t) =>
           !t.artist?.toLowerCase().includes('nusrat') &&
-          !t.artist?.toLowerCase().includes('sabri')
+          !t.title?.toLowerCase().includes('nusrat') &&
+          !t.artist?.toLowerCase().includes('sabri') &&
+          !t.title?.toLowerCase().includes('sabri')
       );
     }
 
@@ -123,7 +127,7 @@ export default function TrackList({
         <div className="qw-songs-header">
           <div className="qw-songs-title-wrap">
             <h2 className="qw-songs-title">
-              {isAuthenticated ? 'Google Drive Songs' : 'All Songs'}
+              All Songs
             </h2>
             <span className="qw-songs-total-count">
               ({isLoadingTracks ? 'Scanning...' : filteredAndSortedTracks.length})
@@ -338,8 +342,9 @@ export default function TrackList({
               const isThisPlaying = isActive && isPlaying;
               const isFav = favorites.has(track.id);
               const durationFormatted = formatTime(track.duration || 360);
-              const trackCover = track.cover || '/cover-tere-ishq.jpg';
+              const trackCover = track.cover || '/nusrat-all-songs.jpg';
               const albumName = track.album || track.genre || 'The Legend';
+              const displayArtist = track.artist && track.artist !== 'Google Drive' ? track.artist : track.title;
 
               return (
                 <div
@@ -377,7 +382,7 @@ export default function TrackList({
                       alt=""
                       className="qw-row-thumb"
                       onError={(e) => {
-                        e.target.src = '/hero-player-thumb.jpg';
+                        e.target.src = '/nusrat-all-songs.jpg';
                       }}
                     />
                   </div>
@@ -387,7 +392,7 @@ export default function TrackList({
                     <span className={`qw-row-title ${isActive ? 'active-text-gold' : ''}`}>
                       {track.title}
                     </span>
-                    <span className="qw-row-artist">{track.artist}</span>
+                    <span className="qw-row-artist">{displayArtist}</span>
                   </div>
 
                   {/* Album Name (Desktop) */}

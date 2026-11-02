@@ -15,8 +15,10 @@ export default function MiniPlayerBar({
   if (isAuthenticated && activeTrack.isDemo) return null;
 
   const currentTitle = activeTrack.title || 'Tere Ishq Nachaya';
-  const currentArtist = activeTrack.artist || 'Ustad Nusrat Fateh Ali Khan';
-  const currentCover = activeTrack.cover || '/cover-tere-ishq.jpg';
+  const currentArtist = activeTrack.artist && activeTrack.artist !== 'Google Drive'
+    ? activeTrack.artist
+    : (activeTrack.title || 'Ustad Nusrat Fateh Ali Khan');
+  const currentCover = activeTrack.cover || '/nusrat-all-songs.jpg';
 
   return (
     <aside
@@ -32,7 +34,7 @@ export default function MiniPlayerBar({
             alt={currentTitle}
             className="qw-mini-thumb"
             onError={(e) => {
-              e.target.src = '/hero-player-thumb.jpg';
+              e.target.src = '/nusrat-all-songs.jpg';
             }}
           />
           <div className="qw-mini-text">
